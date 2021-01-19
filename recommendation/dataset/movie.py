@@ -44,7 +44,7 @@ class SkipGramDataset(data.Dataset):
             central_idx = self.movie_vocab[central_id]
             context = [self.movie_vocab[movie_id] for movie_id in context]
             # negatives = np.random.choice(self.all_movies, size=len(context)*self.num_negative, p=self.freqs)
-            negatives = torch.mutinomial(self.freqs, len(context)*self.num_negative, replacement=True)
+            negatives = torch.multinomial(self.freqs, len(context)*self.num_negative, replacement=True)
             labels = [1] * len(context) + [0] * len(negatives)
             context.extend(negatives)
             idxes = list(range(len(context)))
