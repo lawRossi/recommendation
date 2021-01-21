@@ -181,13 +181,13 @@ class SkipGramDataset(data.Dataset):
         yield buffer
 
 
-class AdaptedSkipGramDataset(data.Dataset):
+class AdaptedSkipGramDataset(MovieDataset):
     """[summary]
 
     """
     def __init__(self, movie_file, rating_file, window_size=3, cache_path="data/.movie_embs", rebuild_cache=False, max_ratings=100, 
                 min_ratings=3, min_count=3, max_celebrities=10, max_tags=5, num_negative=5):
-        super().__init__()
+        super().__init__(movie_file, rating_file, max_celebrities, max_tags)
         self.movie_file = movie_file
         self.rating_file = rating_file
         self.window_size = window_size
