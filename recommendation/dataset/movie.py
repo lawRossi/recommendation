@@ -13,6 +13,81 @@ import random
 import torch
 
 
+class MovieDataset(data.Dataset):
+    def __init__(self, movie_file, rating_file, max_celebrities=10, max_tags=5):
+        self.movie_file = movie_file
+        self.rating_file = rating_file
+        self.max_celebrities = max_celebrities
+        self.max_tags = max_tags
+
+    def _convert_movie(self, movie_id):
+        movie_idx = self.movie_vocab[movie_id]
+        celebrities = [self.celebrity_vocab.get(celebrity, self.celebrity_oov) for celebrity in self.movies[movie_id]["celebrities"]]
+        celebrities = celebrities[:self.max_celebrities] + [0] * max(0, self.max_celebrities - len(celebrities))
+        celebrities = np.array(celebrities)
+        tags = [self.tag_vocab.get(tag, self.tag_oov) for tag in self.movies[movie_id]["tags"]]
+        tags = tags[:self.max_tags] + [0] * max(0, self.max_tags - len(tags))
+        tags = np.array(tags)
+        return movie_idx, celebrities, tags
+
+    def __len__(self):
+        return self.length
+
+    def _load_ratings(self):
+        print("loading ratings")
+        with open(self.rating_file, encoding="utf-8") as fi:
+            self.ratings = {}
+            rating_data = json.load(fi)
+            for user_id, ratings in rating_data.items():
+                ratings = sorted(ratings, key=lambda rating: rating["date"])
+                likes = [str(rating["movie_id"]) for rating in ratings if rating["rating"] > 3]
+                if len(likes) > self.max_ratings or len(likes) < self.min_ratings:
+                    continue
+                dislikes = [str(rating["movie_id"]) for rating in ratings if rating["rating"] <= 3]
+                self.ratings[user_id] = {"likes": likes, "dislikes": dislikes}
+
+    def _load_movies(self):
+        print("loading movies")
+        rated_movies = set()
+        for ratings in self.ratings.values():
+            rated_movies.update(ratings["likes"] + ratings["dislikes"])
+
+        with open(self.movie_file, encoding="utf-8") as fi:
+            movies = [json.loads(line) for line in fi]
+            self.movies = {}
+            for movie in movies:
+                movie_id = movie["id"]
+                if movie_id in rated_movies:
+                    celebrities = [item["celebrity_id"] for item in movie["directors"]]
+                    for item in movie["screenWriters"] + movie["starrings"]:
+                        if item["celebrity_id"] not in celebrities:
+                            celebrities.append(item["celebrity_id"])
+                    celebrities = [celebrity for celebrity in celebrities if celebrity is not None and len(celebrity) >= 5]
+                    celebrities = celebrities[:self.max_celebrities]
+                    tags = movie.get("producing_countries", []) + movie["genres"]
+                    for tag in movie["tags"]:
+                        if tag not in tags:
+                            tags.append(tag)
+                    tags = [tag.replace(" ", "") for tag in tags]
+                    self.movies[movie_id] = {"celebrities":celebrities, "tags": tags}
+
+    def build_vocabularies(self):
+        counts = Counter(chain.from_iterable(value["likes"] for value in self.ratings.values()))
+        items, freqs = zip(*[(movie_id, count) for movie_id, count in counts.items() if count >= self.min_count])
+        self.movie_vocab = {movie_id: i for i, movie_id in enumerate(items)}
+        freqs = np.array(freqs) ** 0.75
+        freqs = freqs / freqs.sum()
+        self.freqs = freqs
+    
+        celebrity_counts = Counter(chain.from_iterable([movie["celebrities"] for movie in self.movies.values()]))
+        celebrities = [celebrity for celebrity, count in celebrity_counts.items() if count >= self.min_count]
+        self.celebrity_vocab = {celebrity_id: i + 1 for i, celebrity_id in enumerate(celebrities)}
+
+        tag_counts = Counter(chain.from_iterable([movie["tags"] for movie in self.movies.values()]))
+        tags = [tag for tag, count in tag_counts.items() if count >= self.min_count]
+        self.tag_vocab = {tag: i + 1 for i, tag in enumerate(tags)}
+
+
 class SkipGramDataset(data.Dataset):
     def __init__(self, rating_file, window_size=3, cache_path="data/.skipgram", rebuild_cache=False, max_ratings=100, 
             min_count=3, num_negative=5) -> None:
@@ -157,73 +232,6 @@ class AdaptedSkipGramDataset(data.Dataset):
             central_idx, central_celebrities, central_tags = self._convert_movie(central_id)
             return central_idx, central_celebrities, central_tags, np.array(context), np.array(labels)
 
-    def _convert_movie(self, movie_id):
-        movie_idx = self.movie_vocab[movie_id]
-        celebrities = [self.celebrity_vocab.get(celebrity, self.celebrity_oov) for celebrity in self.movies[movie_id]["celebrities"]]
-        celebrities = celebrities[:self.max_celebrities] + [0] * max(0, self.max_celebrities - len(celebrities))
-        celebrities = np.array(celebrities)
-        tags = [self.tag_vocab.get(tag, self.tag_oov) for tag in self.movies[movie_id]["tags"]]
-        tags = tags[:self.max_tags] + [0] * max(0, self.max_tags - len(tags))
-        tags = np.array(tags)
-        return movie_idx, celebrities, tags
-
-    def __len__(self):
-        return self.length
-
-    def _load_ratings(self):
-        print("loading ratings")
-        with open(self.rating_file, encoding="utf-8") as fi:
-            self.ratings = {}
-            rating_data = json.load(fi)
-            for user_id, ratings in rating_data.items():
-                ratings = sorted(ratings, key=lambda rating: rating["date"])
-                likes = [str(rating["movie_id"]) for rating in ratings if rating["rating"] > 3]
-                if len(likes) > self.max_ratings or len(likes) < self.min_ratings:
-                    continue
-                dislikes = [str(rating["movie_id"]) for rating in ratings if rating["rating"] <= 3]
-                self.ratings[user_id] = {"likes": likes, "dislikes": dislikes}
-
-    def _load_movies(self):
-        print("loading movies")
-        rated_movies = set()
-        for ratings in self.ratings.values():
-            rated_movies.update(ratings["likes"] + ratings["dislikes"])
-
-        with open(self.movie_file, encoding="utf-8") as fi:
-            movies = [json.loads(line) for line in fi]
-            self.movies = {}
-            for movie in movies:
-                movie_id = movie["id"]
-                if movie_id in rated_movies:
-                    celebrities = [item["celebrity_id"] for item in movie["directors"]]
-                    for item in movie["screenWriters"] + movie["starrings"]:
-                        if item["celebrity_id"] not in celebrities:
-                            celebrities.append(item["celebrity_id"])
-                    celebrities = [celebrity for celebrity in celebrities if celebrity is not None and len(celebrity) >= 5]
-                    celebrities = celebrities[:self.max_celebrities]
-                    tags = movie.get("producing_countries", []) + movie["genres"]
-                    for tag in movie["tags"]:
-                        if tag not in tags:
-                            tags.append(tag)
-                    tags = [tag.replace(" ", "") for tag in tags]
-                    self.movies[movie_id] = {"celebrities":celebrities, "tags": tags}
-
-    def build_vocabularies(self):
-        counts = Counter(chain.from_iterable(value["likes"] for value in self.ratings.values()))
-        items, freqs = zip(*[(movie_id, count) for movie_id, count in counts.items() if count >= self.min_count])
-        self.movie_vocab = {movie_id: i for i, movie_id in enumerate(items)}
-        freqs = np.array(freqs) ** 0.75
-        freqs = freqs / freqs.sum()
-        self.freqs = freqs
-    
-        celebrity_counts = Counter(chain.from_iterable([movie["celebrities"] for movie in self.movies.values()]))
-        celebrities = [celebrity for celebrity, count in celebrity_counts.items() if count >= self.min_count]
-        self.celebrity_vocab = {celebrity_id: i + 1 for i, celebrity_id in enumerate(celebrities)}
-    
-        tag_counts = Counter(chain.from_iterable([movie["tags"] for movie in self.movies.values()]))
-        tags = [tag for tag, count in tag_counts.items() if count >= self.min_count]
-        self.tag_vocab = {tag: i + 1 for i, tag in enumerate(tags)}
-
     def _build_cache(self, cache_path):
         self._load_ratings()
         self._load_movies()
@@ -304,8 +312,8 @@ class MovieRankdingDataset(AdaptedSkipGramDataset):
         self.history_size = history_size
         super().__init__(movie_file, rating_file, cache_path=cache_path, rebuild_cache=rebuild_cache, 
             max_ratings=max_ratings, min_ratings=min_ratings, num_negative=num_negative)
-        self.tag_oov = len(self.celebrity_vocab) + len(self.tag_vocab) + 3
-        
+        self.tag_oov = len(self.celebrity_vocab) + len(self.tag_vocab) + 2
+
     def __getitem__(self, index):
         with self.env.begin(write=False) as txn:
             history, candidates, labels = pickle.loads(txn.get(struct.pack(">I", index)))
@@ -335,6 +343,8 @@ class MovieRankdingDataset(AdaptedSkipGramDataset):
     
     def build_vocabularies(self):
         self.movie_vocab = {id: i for i, id in enumerate(self.movies.keys())}
+        self.freqs = None
+
         celebrity_counts = Counter(chain.from_iterable([movie["celebrities"] for movie in self.movies.values()]))
         celebrities = [celebrity for celebrity, count in celebrity_counts.items() if count >= self.min_count]
         self.celebrity_vocab = {celebrity_id: i + 1 for i, celebrity_id in enumerate(celebrities)}
