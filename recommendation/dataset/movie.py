@@ -334,15 +334,14 @@ class MovieRankdingDataset(AdaptedSkipGramDataset):
         return movie, seq_len
     
     def build_vocabularies(self):
-        movie_vocab = {id: i for i, id in enumerate(self.movies.keys())}
+        self.movie_vocab = {id: i for i, id in enumerate(self.movies.keys())}
         celebrity_counts = Counter(chain.from_iterable([movie["celebrities"] for movie in self.movies.values()]))
         celebrities = [celebrity for celebrity, count in celebrity_counts.items() if count >= self.min_count]
-        celebrity_vocab = {celebrity_id: i + 1 for i, celebrity_id in enumerate(celebrities)}
-        celebrity_vocab_size = len(celebrity_vocab) + 2
+        self.celebrity_vocab = {celebrity_id: i + 1 for i, celebrity_id in enumerate(celebrities)}
+        celebrity_vocab_size = len(self.celebrity_vocab) + 2
         tag_counts = Counter(chain.from_iterable([movie["tags"] for movie in self.movies.values()]))
         tags = [tag for tag, count in tag_counts.items() if count >= self.min_count]
-        tag_vocab = {tag: i + celebrity_vocab_size for i, tag in enumerate(tags)}
-        return movie_vocab, celebrity_vocab, tag_vocab
+        self.tag_vocab = {tag: i + celebrity_vocab_size for i, tag in enumerate(tags)}
 
     def _yield_buffer(self, buffer_size=1000):
         buffer = list()
