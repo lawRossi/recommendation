@@ -256,7 +256,11 @@ class GESDataset(MovieDataset):
 
             central_idx = self.movie_vocab[central_id]
             genres = self.movies[central_id]["genres"]
+            genres_oov = len(self.genres_vocab)
+            genres = self.genres_vocab.get(genres, genres_oov)
             country = self.movies[central_id]["country"]
+            country_oov = len(self.country_vocab)
+            country = self.country_vocab.get(country, country_oov)
             return central_idx, genres, country, np.array(context), np.array(labels)
 
     def build_vocabularies(self):
@@ -269,11 +273,11 @@ class GESDataset(MovieDataset):
     
         genres_counts = Counter([movie["genres"] for movie in self.movies.values()])
         genres = [genres for genres, count in genres_counts.items() if count >= self.min_count]
-        self.genres_vocab = {genres_id: i + 1 for i, genres_id in enumerate(genres)}
+        self.genres_vocab = {genres_id: i for i, genres_id in enumerate(genres)}
 
         country_counts = Counter([movie["country"] for movie in self.movies.values()])
         countrys = [country for country, count in country_counts.items() if count >= self.min_count]
-        self.country_vocab = {country: i + 1 for i, country in enumerate(countrys)}
+        self.country_vocab = {country: i for i, country in enumerate(countrys)}
 
         if not os.path.exists(self.cache_path):
             os.makedirs(self.cache_path)
