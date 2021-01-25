@@ -294,17 +294,14 @@ class GESDataset(MovieDataset):
         for rating in pbar:
             likes = rating["likes"]
             likes = [movie_id for movie_id in likes if movie_id in self.movie_vocab]
-            n = len(likes) // 15
-            for _ in range(n):
-                for i in range(self.window_size, len(likes)-self.window_size):
-                    central_id = likes[i]
-                    context = likes[i-self.window_size:i] + likes[i+1:i+self.window_size]
-                    buffer.append((struct.pack(">I", item_idx), pickle.dumps((central_id, context))))
-                    item_idx += 1
-                    if len(buffer) == buffer_size:
-                        yield buffer
-                        buffer.clear()
-                random.shuffle(likes)
+            for i in range(self.window_size, len(likes)-self.window_size):
+                central_id = likes[i]
+                context = likes[i-self.window_size:i] + likes[i+1:i+self.window_size]
+                buffer.append((struct.pack(">I", item_idx), pickle.dumps((central_id, context))))
+                item_idx += 1
+                if len(buffer) == buffer_size:
+                    yield buffer
+                    buffer.clear()
         yield buffer
 
 
