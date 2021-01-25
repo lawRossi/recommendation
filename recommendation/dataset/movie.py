@@ -229,7 +229,6 @@ class GESDataset(MovieDataset):
             self.movies = {}
             for movie in movies:
                 movie_id = movie["id"]
-                print(movie_id)
                 if movie_id in rated_movies:
                     genres = movie.get("genres", None)
                     if genres:
@@ -258,7 +257,7 @@ class GESDataset(MovieDataset):
             central_idx = self.movie_vocab[central_id]
             genres = self.movies[central_id]["genres"]
             country = self.movies[central_id]["country"]
-            return central_idx, genres, country, context, labels
+            return central_idx, genres, country, np.array(context), np.array(labels)
 
     def build_vocabularies(self):
         counts = Counter(chain.from_iterable(value["likes"] for value in self.ratings.values()))
