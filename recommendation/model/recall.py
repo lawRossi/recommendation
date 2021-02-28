@@ -56,7 +56,7 @@ class YoutubeNetModel(nn.Module):
             nn.ReLU(), nn.Linear(hidden_dims[1], hidden_dims[2]), nn.ReLU())
         self.loss = SampledSoftmaxLoss(num_items, item_emb_dims, num_negatives=num_negatives, weights=weights)
 
-    def forward(self, history, positives, discrete_features=None, real_value_features=None, training=True):
+    def forward(self, history, positives=None, discrete_features=None, real_value_features=None):
         """[summary]
 
         Args:
@@ -77,7 +77,7 @@ class YoutubeNetModel(nn.Module):
             features.append(real_value_features)
         embedded_features = torch.cat(features, dim=-1)
         hidden = self.hidden_layers(embedded_features)
-        if training:
+        if positives is not None:
             loss = self.loss(hidden, positives)
             return loss
         else:
@@ -105,7 +105,7 @@ class MhaRecallModel(nn.Module):
         self.loss = SampledSoftmaxLoss(num_items, item_emb_dims, num_negatives=num_negatives, weights=weights)
         self.device = torch.device(device)
 
-    def forward(self, history, history_sizes, positives, discrete_features=None, real_value_features=None, training=True):
+    def forward(self, history, history_sizes, positives=None, discrete_features=None, real_value_features=None):
         """[summary]
 
         Args:
@@ -136,7 +136,7 @@ class MhaRecallModel(nn.Module):
             hidden = self.hidden_layers(embedded_features)
         else:
             hidden = encoded_history
-        if training:
+        if positives is not None:
             loss = self.loss(hidden, positives)
             return loss
         else:
