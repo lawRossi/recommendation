@@ -10,7 +10,6 @@ import numpy as np
 from itertools import chain
 from collections import Counter
 import random
-import torch
 
 
 class MovieDataset(data.Dataset):
@@ -232,12 +231,12 @@ class GESDataset(MovieDataset):
                 if movie_id in rated_movies:
                     genres = movie.get("genres", None)
                     if genres:
-                        genres = genres[0]
+                        genres = genres[0].replace(" ", "").lower()
                     else:
                         genres = None
                     country = movie.get("producing_countries", None)
                     if country:
-                        country = country[0]
+                        country = country[0].replace(" ", "").lower()
                     else:
                         country = None
                     self.movies[movie_id] = {"genres": genres, "country": country}
