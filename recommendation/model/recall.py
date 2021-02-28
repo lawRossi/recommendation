@@ -10,6 +10,8 @@ class SampledSoftmaxLoss(nn.Module):
         super().__init__()
         self.vocab_size = vocab_size
         self.embdding = nn.Embedding(vocab_size, emb_dims)
+        init_range = 0.5 / self.emb_dims
+        self.embdding.weight.data.uniform_(-init_range, init_range)
         self.num_negatives = num_negatives
         if weights is not None:
             self.weights = torch.tensor(weights, dtype=torch.float)
