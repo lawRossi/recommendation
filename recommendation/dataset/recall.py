@@ -114,7 +114,4 @@ class RecallDataset(data.Dataset):
                     idx += 1
                     if len(buffer) == buffer_size:
                         yield buffer
-                if idx >= 1000:
-                        break
             yield buffer
-
