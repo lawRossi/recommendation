@@ -101,20 +101,23 @@ class NRMSRecaller(Recaller):
 
 
 class Item2vectorRecaller(Recaller):
-    def __init__(self, model_dir):
+    def __init__(self, model_dir, last_n=5):
         self.model_dir = model_dir
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
+        self.last_n = last_n
         model_path = os.path.join(model_dir, "item_vecs.txt")
         self.model = KeyedVectors.load_word2vec_format(model_path).wv
         self.index = ContentIndex(self.model.wv.vector_size, self.encode_contents, "cosine")
 
     def recall(self, clicked_contents, user=None, topk=20):
         clicked_contents = [content for content in clicked_contents if content["id"] in self.model.vocab]
+        clicked_contents[-self.last_n:]
         if not clicked_contents:
             return []
         query_vecs = self.encode_contents(clicked_contents)
-        content_ids = self.index.retrieve(query_vecs, topk)
+        n = topk // self.last_n
+        content_ids = self.index.retrieve(query_vecs, n)
         clicked_ids = [content["id"] for content in clicked_contents]
         recalled_ids = [content_id for content_id in chain.from_iterable(content_ids) if content_id not in clicked_ids]
         return recalled_ids
