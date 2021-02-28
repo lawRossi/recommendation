@@ -1,5 +1,4 @@
 from collections import defaultdict
-from numpy.core.arrayprint import set_string_function
 from torch.utils import data
 import lmdb
 import shutil
@@ -25,11 +24,10 @@ class RecallDataset(data.Dataset):
         self.env = lmdb.open(cache_path, create=False, lock=False, readonly=True)
         with self.env.begin(write=False) as txn:
             self.length = txn.stat()["entries"] - 1
-            content_ids, vocab, attr_vocabs, freqs = pickle.loads(txn.get(b"components"))
-            self.content_ids = content_ids
+            vocab, attr_vocabs, weights = pickle.loads(txn.get(b"components"))
             self.vocab = vocab
             self.attr_vocabs = attr_vocabs
-            self.content_freqs = freqs
+            self.weights = weights
 
     def __len__(self) -> int:
         return self.length
@@ -67,12 +65,12 @@ class RecallDataset(data.Dataset):
             counts = {k: v for k, v in counts.items() if v >= self.min_count}
             ids, freqs = zip(*counts.items())
             content_ids = np.array(ids)
+            freqs = [0] + list(freqs)  # add frequence for padding idx
             freqs = np.array(freqs) ** 0.75
             freqs = freqs / freqs.sum()
             vocab = {content_id: i + 1 for i, content_id in enumerate(content_ids)}
-            self.content_ids = content_ids
             self.vocab = vocab
-            self.content_freqs = freqs
+            self.weights = freqs
         if self.attr_file:
             attr_counts = defaultdict(lambda : defaultdict(int))
             for attrs in self.attributes.values():
@@ -91,7 +89,7 @@ class RecallDataset(data.Dataset):
         self._build_vocab_builary()
         with lmdb.open(cache_path, map_size=int(1e11)) as env:
             with env.begin(write=True) as txn:
-                txn.put(b"components", pickle.dumps((self.content_ids, self.vocab, self.attr_vocabs, self.content_freqs)))
+                txn.put(b"components", pickle.dumps((self.vocab, self.attr_vocabs, self.content_freqs)))
                 for buffer in self._yield_buffer():
                     for key, value in buffer:
                         txn.put(key, value)

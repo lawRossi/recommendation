@@ -22,13 +22,14 @@ class ContentIndex:
         if self.metric == "cosine":
             faiss.normalize_L2(encoded_vecs)
         index.train(encoded_vecs)
+        index.add(encoded_vecs)
         index_file = os.path.join(save_dir, "index.faiss")
         faiss.write_index(index, index_file)
         with open(os.path.join(save_dir, "content_ids.json"), "w") as fo:
-            json.dump(self.content_ids)
+            json.dump(self.content_ids, fo)
     
     def load_index(self, save_dir):
-        index_file = os.path.join(save_dir, "index.fiass")
+        index_file = os.path.join(save_dir, "index.faiss")
         self.index = faiss.read_index(index_file)
         with open(os.path.join(save_dir, "content_ids.json")) as fi:
             self.content_ids = json.load(fi)
@@ -106,7 +107,7 @@ class Item2vectorRecaller(Recaller):
             os.makedirs(model_dir)
         model_path = os.path.join(model_dir, "item_vecs.txt")
         self.model = KeyedVectors.load_word2vec_format(model_path).wv
-        self.index = ContentIndex(self.model.wv.vector_size, self.encode_contents)
+        self.index = ContentIndex(self.model.wv.vector_size, self.encode_contents, "cosine")
 
     def recall(self, clicked_contents, user=None, topk=20):
         clicked_contents = [content for content in clicked_contents if content["id"] in self.model.vocab]
@@ -119,7 +120,7 @@ class Item2vectorRecaller(Recaller):
         return recalled_ids
 
     def encode_contents(self, contents):
-        contents = [content for content in contents if content["id"] in self.model_vocab]
+        contents = [content for content in contents if content["id"] in self.model.vocab]
         vecs = [self.model[content["id"]] for content in contents]
         return np.array(vecs, dtype="float32")
     
