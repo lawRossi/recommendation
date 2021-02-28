@@ -12,13 +12,11 @@ class SampledSoftmaxLoss(nn.Module):
         self.embdding = nn.Embedding(vocab_size, emb_dims)
         self.num_negatives = num_negatives
         if weights is not None:
-            weights = np.power(weights, 0.75)
-            weights = weights / weights.sum()
             self.weights = torch.tensor(weights, dtype=torch.float)
         else:
             self.weights = None
         self.padding = padding
-    
+
     def forward(self, hidden, positives):
         if len(positives.shape) == 1:
             batch_size, context_size = positives.shape[0], 1
