@@ -89,7 +89,7 @@ class RecallDataset(data.Dataset):
         self._build_vocab_builary()
         with lmdb.open(cache_path, map_size=int(1e11)) as env:
             with env.begin(write=True) as txn:
-                txn.put(b"components", pickle.dumps((self.vocab, self.attr_vocabs, self.content_freqs)))
+                txn.put(b"components", pickle.dumps((self.vocab, self.attr_vocabs, self.weights)))
                 for buffer in self._yield_buffer():
                     for key, value in buffer:
                         txn.put(key, value)
