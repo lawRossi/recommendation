@@ -16,7 +16,7 @@ class ContentIndex:
         self.content_ids = None
     
     def build_index(self, contents, save_dir):
-        index = faiss.index_factory(self.dimension, "IVF100, PQ10", faiss.METRIC_INNER_PRODUCT)
+        index = faiss.index_factory(self.dimension, "IVF100, PQ10", faiss.METRIC_L2)
         self.content_ids = [content["id"] for content in contents]
         encoded_vecs = self.encode_func(contents)
         if self.metric == "cosine":
@@ -99,15 +99,15 @@ class NRMSRecaller(Recaller):
         self.index.load_index(self.model_dir)
 
 
-class SkipgramRecaller(Recaller):
+class Item2vectorRecaller(Recaller):
     def __init__(self, model_dir):
         self.model_dir = model_dir
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
-        model_path = os.path.join(model_dir, "skipgram.txt")
+        model_path = os.path.join(model_dir, "item_vecs.txt")
         self.model = KeyedVectors.load_word2vec_format(model_path).wv
         self.index = ContentIndex(self.model.wv.vector_size, self.encode_contents)
-    
+
     def recall(self, clicked_contents, user=None, topk=20):
         clicked_contents = [content for content in clicked_contents if content["id"] in self.model.vocab]
         if not clicked_contents:
