@@ -45,6 +45,8 @@ class YoutubeNetModel(nn.Module):
     def __init__(self, num_items, item_emb_dims=100, discrete_vocab_sizes=None, discrete_emb_dims=20, num_real_values=0,
             num_negatives=5, weights=None):
         super().__init__()
+        self.num_items = num_items
+        self.item_emb_dims = item_emb_dims
         self.item_embedding = nn.Embedding(num_items, item_emb_dims)
         feature_emb_dims = item_emb_dims
         if discrete_vocab_sizes:
@@ -88,6 +90,8 @@ class MhaRecallModel(nn.Module):
     def __init__(self, num_items, item_emb_dims, num_heads, discrete_vocab_sizes=None, discrete_emb_dims=20, 
             num_real_values=0, num_negatives=5, weights=None, additive_atten_dims=100, dropout=0.2, device="cpu"):
         super().__init__()
+        self.num_items = num_items
+        self.item_emb_dims = item_emb_dims
         self.item_embedding = nn.Embedding(num_items, item_emb_dims)
         self.mha = nn.MultiheadAttention(item_emb_dims, num_heads, dropout=dropout)
         self.addtive = AdditiveAttention(item_emb_dims, additive_atten_dims)
