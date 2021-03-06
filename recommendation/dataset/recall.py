@@ -37,10 +37,10 @@ class RecallDataset(data.Dataset):
             for attrs in self.attributes.values():
                 for attr_name in self.attribute_names:
                     attr_counts[attr_name][attrs[attr_name]] += 1
-            self.attr_vocabs = {
-                attr_name: {k: i for i, (k, v) in enumerate(counts.items()) if v >= self.min_count} 
-                for attr_name, counts in attr_counts.items()
-            }
+            self.attr_vocabs = {}
+            for attr_name, counts in attr_counts.items():
+                attr_vocab = {attr for attr, count in counts.items() if count >= self.min_count}
+                self.attr_vocabs[attr_name] = {attr: i for i, attr in enumerate(attr_vocab)}
         else:
             self.attr_vocabs = None
 
