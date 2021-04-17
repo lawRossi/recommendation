@@ -1,6 +1,6 @@
 from collections import defaultdict
 import faiss
-from model import NRMSModel
+from .model_wraper import NRMSModel
 import json
 import os
 import numpy as np

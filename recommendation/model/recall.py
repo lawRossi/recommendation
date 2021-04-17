@@ -61,7 +61,8 @@ class YoutubeNetModel(nn.Module):
         """[summary]
 
         Args:
-            history (tensor): tensor of shape (batch_size, history_size)
+            click_history (tensor): tensor of shape (batch_size, history_size)
+            positives (tensor, optional): tensor of shape (batch_size, ). 
             discrete_features (list, optional): a list of tensor of shape (batch_size, ). 
             real_value_features (list, optional): tensor of shape (batch_size, num_features).
         """
