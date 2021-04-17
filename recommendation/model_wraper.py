@@ -136,4 +136,4 @@ class YoutubeNetModel:
         else:
             discrete_tensors = None
         encodings = self.model(history_tensor, discrete_features=discrete_tensors)
-        return encodings[0]
+        return encodings.cpu().detach().numpy()

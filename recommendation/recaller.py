@@ -1,6 +1,6 @@
 from collections import defaultdict
 import faiss
-from .model_wraper import NRMSModel
+from .model_wraper import NRMSModel, YoutubeNetModel
 import json
 import os
 import numpy as np
@@ -136,6 +136,18 @@ class Item2vectorRecaller(Recaller):
 
     def load_index(self):
         self.index.load_index(self.model_dir)
+
+
+class YoutubeNetRecaller(Item2vectorRecaller):
+    def __init__(self, model_dir, max_history=30, device="cpu"):
+        super().__init__(model_dir, 1)
+        self.encoder_model = YoutubeNetModel(model_dir, max_history, device=device)
+
+    def recall(self, clicked_items, user=None, topk=20):
+        clicked_items = [item["id"] for item in clicked_items if item["id"] in self.model.vocab]
+        query_vec = self.encoder_model(clicked_items)
+        recalled_ids = self.index.retrieve(query_vec, topk)
+        return recalled_ids
 
 
 class CompoundRecaller(Recaller):
