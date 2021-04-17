@@ -9,14 +9,17 @@ from gensim.models.keyedvectors import KeyedVectors
 
 
 class ContentIndex:
-    def __init__(self, dimension, encode_func, metric="dot"):
+    def __init__(self, dimension, encode_func, metric="dot", n_clusters=20, n_pq=10):
         self.dimension = dimension
         self.encode_func = encode_func
         self.metric = metric
         self.content_ids = None
-    
+        self.n_clusters = n_clusters
+        self.n_pq = n_pq
+
     def build_index(self, contents, save_dir):
-        index = faiss.index_factory(self.dimension, "IVF100, PQ10", faiss.METRIC_L2)
+        metric = faiss.METRIC_L2 if self.metric == "l2" else faiss.METRIC_INNERPRODUCT
+        index = faiss.index_factory(self.dimension, f"IVF{self.n_clusters}, PQ{self.n_pq}", metric)
         self.content_ids = [content["id"] for content in contents]
         encoded_vecs = self.encode_func(contents)
         if self.metric == "cosine":
@@ -27,7 +30,8 @@ class ContentIndex:
         faiss.write_index(index, index_file)
         with open(os.path.join(save_dir, "content_ids.json"), "w") as fo:
             json.dump(self.content_ids, fo)
-    
+        self.index = index
+
     def load_index(self, save_dir):
         index_file = os.path.join(save_dir, "index.faiss")
         self.index = faiss.read_index(index_file)
@@ -38,10 +42,10 @@ class ContentIndex:
         vecs = self.encode_func(contents)
         self.index.add(vecs)
     
-    def retrieve(self, query_vecs, topk=10):
+    def retrieve(self, query_vecs, topk=10, nprob=4):
         if self.metric == "cosine":
             faiss.normalize_L2(query_vecs)
-        _, nns = self.index.search(query_vecs, topk)
+        _, nns = self.index.search(query_vecs, topk, nprob)
         return [[self.content_ids[idx] for idx in item if idx != -1] for item in nns]
 
 
@@ -67,11 +71,10 @@ class NRMSRecaller(Recaller):
         self.model_dir = model_dir
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
-        vocab_file = os.path.join(model_dir, "vocab.json")
         model_path = os.path.join(model_dir, "nrms_model.pt")
-        self.nrms_model = NRMSModel(model_path, "emb_dims")
+        self.nrms_model = NRMSModel(model_path)
         self.index = ContentIndex(self.nrms_model.emb_dim, self.encode_contents)
-    
+
     def recall(self, clicked_contents, user=None, topk=20):
         history = [content["text"] for content in clicked_contents]
         user_vec =  self.nrms_model.encode_users([history])
@@ -130,7 +133,7 @@ class Item2vectorRecaller(Recaller):
     def build_index(self, contents):
         contents = [{"id": key} for key in self.model.vocab.keys()]
         self.index.build_index(contents, self.model_dir)
-    
+
     def load_index(self):
         self.index.load_index(self.model_dir)
 
