@@ -145,7 +145,7 @@ class YoutubeNetRecaller(Item2vectorRecaller):
 
     def recall(self, clicked_items, user=None, topk=20):
         clicked_items = [item["id"] for item in clicked_items if item["id"] in self.model.vocab]
-        query_vec = self.encoder_model(clicked_items)
+        query_vec = self.encoder_model.encode_user(clicked_items)
         recalled_ids = self.index.retrieve(query_vec, topk)
         return recalled_ids
 
