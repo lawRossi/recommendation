@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
-import numpy as np
-import numpy as np
-from .nrms import AdditiveAttention
+from .nrms import DocEncoder
 
 
 class SampledSoftmaxLoss(nn.Module):
@@ -43,11 +41,11 @@ class SampledSoftmaxLoss(nn.Module):
 
 class YoutubeNetModel(nn.Module):
     def __init__(self, num_items, item_emb_dims=100, discrete_vocab_sizes=None, discrete_emb_dims=20, num_real_values=0,
-            num_negatives=5, weights=None):
+            num_negatives=5, weights=None, droput=0.2):
         super().__init__()
         self.num_items = num_items
         self.item_emb_dims = item_emb_dims
-        self.item_embedding = nn.Embedding(num_items, item_emb_dims)
+        self.item_embedding = nn.Embedding(num_items, item_emb_dims, padding_idx=0)
         feature_emb_dims = item_emb_dims
         if discrete_vocab_sizes:
             self.discrete_embeddings = nn.ModuleList([nn.Embedding(vocab_size, discrete_emb_dims) for vocab_size in discrete_vocab_sizes])
@@ -56,17 +54,18 @@ class YoutubeNetModel(nn.Module):
         hidden_dims = [item_emb_dims * 4, item_emb_dims*2, item_emb_dims]
         self.hidden_layers = nn.Sequential(nn.Linear(feature_emb_dims, hidden_dims[0]), nn.ReLU(), nn.Linear(hidden_dims[0], hidden_dims[1]), 
             nn.ReLU(), nn.Linear(hidden_dims[1], hidden_dims[2]), nn.ReLU())
+        self.dropout = nn.Dropout(droput)
         self.loss = SampledSoftmaxLoss(num_items, item_emb_dims, num_negatives=num_negatives, weights=weights)
 
-    def forward(self, history, positives=None, discrete_features=None, real_value_features=None):
+    def forward(self, click_history, positives=None, discrete_features=None, real_value_features=None):
         """[summary]
 
         Args:
             history (tensor): tensor of shape (batch_size, history_size)
-            discrete_features (list, optional): a list of tensor of shape (batch_size, ). Defaults to None.
-            real_value_features (list, optional): tensor of shape (batch_size, num_features). Defaults to None.
+            discrete_features (list, optional): a list of tensor of shape (batch_size, ). 
+            real_value_features (list, optional): tensor of shape (batch_size, num_features).
         """
-        embedded_history = self.item_embedding(history).mean(dim=1)  # batch_size x emb_dims
+        embedded_history = self.item_embedding(click_history).mean(dim=1)  # batch_size x emb_dims
         features = [embedded_history]
         if discrete_features is not None:
             embedded_discrete_features = []
@@ -77,7 +76,7 @@ class YoutubeNetModel(nn.Module):
             features.extend(embedded_discrete_features)
         if real_value_features is not None:
             features.append(real_value_features)
-        embedded_features = torch.cat(features, dim=-1)
+        embedded_features = self.dropout(torch.cat(features, dim=-1))
         hidden = self.hidden_layers(embedded_features)
         if positives is not None:
             loss = self.loss(hidden, positives)
@@ -86,47 +85,41 @@ class YoutubeNetModel(nn.Module):
             return hidden
 
 
-class MhaRecallModel(nn.Module):
-    def __init__(self, num_items, item_emb_dims, num_heads, discrete_vocab_sizes=None, discrete_emb_dims=20, 
-            num_real_values=0, num_negatives=5, weights=None, additive_atten_dims=100, dropout=0.2, device="cpu"):
+class YoutubeNetSeqModel(nn.Module):
+    def __init__(self, vocab_size, item_emb_dims, discrete_vocab_sizes=None, discrete_emb_dims=20, num_real_values=0,
+            embedding_weights=None, droput=0.2):
         super().__init__()
-        self.num_items = num_items
-        self.item_emb_dims = item_emb_dims
-        self.item_embedding = nn.Embedding(num_items, item_emb_dims)
-        self.mha = nn.MultiheadAttention(item_emb_dims, num_heads, dropout=dropout)
-        self.addtive = AdditiveAttention(item_emb_dims, additive_atten_dims)
+        self.item_encoder = DocEncoder(vocab_size, item_emb_dims, num_heads=10, embedding_weights=embedding_weights)
+        feature_emb_dims = item_emb_dims
+        if discrete_vocab_sizes:
+            self.discrete_embeddings = nn.ModuleList([nn.Embedding(vocab_size, discrete_emb_dims) for vocab_size in discrete_vocab_sizes])
+            feature_emb_dims += len(discrete_vocab_sizes) * discrete_emb_dims
+        feature_emb_dims += num_real_values
+        hidden_dims = [item_emb_dims * 4, item_emb_dims*2, item_emb_dims]
+        self.droput = nn.Dropout(droput)
+        self.hidden_layers = nn.Sequential(nn.Linear(feature_emb_dims, hidden_dims[0]), nn.ReLU(), nn.Linear(hidden_dims[0], hidden_dims[1]), 
+            nn.ReLU(), nn.Linear(hidden_dims[1], hidden_dims[2]), nn.ReLU())
+        self.dropout = nn.Dropout(droput)
+        self.loss = nn.BCELoss()
 
-        if discrete_vocab_sizes or num_real_values != 0:
-            feature_emb_dims = item_emb_dims
-            if discrete_vocab_sizes:
-                self.discrete_embeddings = nn.ModuleList([nn.Embedding(vocab_size, discrete_emb_dims) for vocab_size in discrete_vocab_sizes])
-                feature_emb_dims += len(discrete_vocab_sizes) * discrete_emb_dims
-            feature_emb_dims += num_real_values
-            hidden_dims = [item_emb_dims * 4, item_emb_dims*2, item_emb_dims]
-            self.hidden_layers = nn.Sequential(nn.Linear(feature_emb_dims, hidden_dims[0]), nn.ReLU(), nn.Linear(hidden_dims[0], hidden_dims[1]), 
-                nn.ReLU(), nn.Linear(hidden_dims[1], hidden_dims[2]), nn.ReLU())
-
-        self.loss = SampledSoftmaxLoss(num_items, item_emb_dims, num_negatives=num_negatives, weights=weights)
-        self.device = torch.device(device)
-
-    def forward(self, history, history_sizes, positives=None, discrete_features=None, real_value_features=None):
+    def forward(self, click_history, candidates=None, labels=None, discrete_features=None, real_value_features=None):
         """[summary]
 
         Args:
-            history (tensor): tensor of shape (batch_size, history_size)
+            history (tensor): tensor of shape (batch_size, history_size, sequence_len)
+            candidates (tensor): tensor of shape (batch_size, num_candidates, sequence_len)
+            labels (tensor): tensor of shape (batch_size, num_candidates)
             discrete_features (list, optional): a list of tensor of shape (batch_size, ). Defaults to None.
             real_value_features (list, optional): tensor of shape (batch_size, num_features). Defaults to None.
         """
-        max_history_size = history.shape[1]
-        embedded_history = self.item_embedding(history)  # batch_size x max_history x emb_dims
-        permuted = embedded_history.permute(1, 0, 2)
-        mha_attended, _ = self.mha(permuted, permuted, permuted)
-        mha_attended = mha_attended.permute(1, 0, 2)
-        masks = self._compute_mask(max_history_size, history_sizes)
-        encoded_history = self.addtive(mha_attended, masks)
+        batch_size, history_size, seq_len = click_history.shape
+        reshaped_history = click_history.reshape(-1, seq_len)
+        encoded_history = self.item_encoder(reshaped_history)
+        encoded_history = encoded_history.reshape(batch_size, history_size, -1)
+        encoded_history = encoded_history.mean(dim=1)
 
         features = [encoded_history]
-        if discrete_features:
+        if discrete_features is not None:
             embedded_discrete_features = []
             for i, item in enumerate(discrete_features):
                 embedded_discrete_features.append(self.discrete_embeddings[i](item))
@@ -135,20 +128,22 @@ class MhaRecallModel(nn.Module):
             features.extend(embedded_discrete_features)
         if real_value_features is not None:
             features.append(real_value_features)
-        if discrete_features is not None or real_value_features is not None:
-            embedded_features = torch.cat(features, dim=-1)
-            hidden = self.hidden_layers(embedded_features)
-        else:
-            hidden = encoded_history
-        if positives is not None:
-            loss = self.loss(hidden, positives)
+        embedded_features = self.dropout(torch.cat(features, dim=-1))
+        hidden = self.hidden_layers(embedded_features)
+
+        if candidates is not None:
+            _, num_candidates, _ = candidates.shape
+            reshaped_candidates = candidates.reshape(-1, seq_len)
+            encoded_candidates = self.item_encoder(reshaped_candidates)
+            encoded_candidates = encoded_candidates.reshape(batch_size, num_candidates, -1)
+            print(encoded_candidates.shape)
+            logits = torch.bmm(hidden.unsqueeze(1), encoded_candidates.permute(0, 2, 1)).squeeze(1)
+            probas = torch.sigmoid(logits)
+            print(probas)
+            loss = self.loss(probas, labels)
             return loss
         else:
             return hidden
-
-    def _compute_mask(self, max_seq_len, seq_lens):
-        mask = torch.arange(max_seq_len, device=self.device) >= seq_lens[:, None]
-        return mask
 
 
 if __name__ == "__main__":
@@ -157,15 +152,14 @@ if __name__ == "__main__":
     # discrete_features = [torch.tensor([[1, 2], [2, 3]], dtype=torch.long), torch.tensor([2, 3], dtype=torch.long)]
     # real_value_features = torch.tensor([[0.1, 0.2, 0.1], [0.2, 0.4, 0.3]])
     # positives = torch.tensor([4, 5], dtype=torch.long)
-    # loss = hidden = model(history, positives, discrete_features, real_value_features)
+    # loss = model(history, positives, discrete_features, real_value_features)
     # print(loss)
 
-
-    model = MhaRecallModel(10, 20, 4, [5, 5], num_real_values=3)
-    history = torch.tensor([[1, 2, 3], [2, 3, 4]], dtype=torch.long)
-    history_sizes = torch.tensor([3, 3])
+    model = YoutubeNetSeqModel(10, 20, [5, 5], 10, num_real_values=3)
+    history = torch.tensor([[[1, 2, 3], [1, 2, 3]], [[2, 3, 4], [1, 2, 3]]], dtype=torch.long)
     discrete_features = [torch.tensor([[1, 2], [2, 3]], dtype=torch.long), torch.tensor([2, 3], dtype=torch.long)]
     real_value_features = torch.tensor([[0.1, 0.2, 0.1], [0.2, 0.4, 0.3]])
-    positives = torch.tensor([4, 5], dtype=torch.long)
-    loss = model(history, history_sizes, positives, discrete_features, real_value_features)
+    candidates = torch.tensor([[[1, 2, 3], [1, 2, 3]], [[2, 3, 4], [1, 2, 3]]], dtype=torch.long)
+    labels = torch.tensor([[1, 0], [0, 1]], dtype=torch.float)
+    loss = model(history, candidates, labels, discrete_features, real_value_features)
     print(loss)

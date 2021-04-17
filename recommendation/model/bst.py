@@ -1,15 +1,14 @@
-from .nrms import DocEncoder
+from nrms import DocEncoder
 import torch.nn as nn
 import torch
 import numpy as np
 
 
 class BSTModel(nn.Module):
-    def __init__(self, vocab_size, emb_dims, num_doc_encoder_heads, attention_hidden_dim=100, 
-            num_transformer_heads=10, history_size=20, weights=None, discrete_vocab_sizes=None,
-            discrete_emb_dims=20, real_value_dims=0, dropout=0.2, device="cpu"):
+    def __init__(self, num_items, emb_dims, num_transformer_heads=10, history_size=20, discrete_vocab_sizes=None,
+            discrete_emb_dims=20, real_value_dims=0, dropout=0.2):
         super().__init__()
-        self.doc_encoder = DocEncoder(vocab_size, emb_dims, num_doc_encoder_heads, weights, attention_hidden_dim, dropout)
+        self.item_embedding = nn.Embedding(num_items, emb_dims, padding_idx=0)
         encoder_layer = nn.TransformerEncoderLayer(emb_dims, num_transformer_heads)
         self.transformer = nn.TransformerEncoder(encoder_layer, 1)
         self.real_value_dims = real_value_dims
@@ -21,8 +20,53 @@ class BSTModel(nn.Module):
         self.hidden_layers = nn.Sequential(nn.Linear(hidden_size, 1024), nn.ReLU(),
             nn.Linear(1024, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU())
         self.output = nn.Sequential(nn.Linear(256, 1), nn.Sigmoid())
+        self.dropout = nn.Dropout(dropout)
+
+    def _init_embedding_weights(self):
+        pass
+
+    def forward(self, click_history, candidates, discretes=None, real_values=None):
+        encoded_history = self.item_embedding(click_history)
+        encoded_candidates = self.item_embedding(candidates).unsqueeze(1)
+        concated = torch.cat((encoded_history, encoded_candidates), dim=1)
+        transformed = self.transformer(concated)
+        batch_size, _ = click_history.shape
+        flattend = transformed.reshape(batch_size, -1)
+
+        discrete_embs = []
+        if discretes is not None:
+            for discrete, embedding in zip(discretes, self.discrete_embeddings):
+                discrete_embs.append(embedding(discrete))
+
+        to_concat = [flattend] + discrete_embs
+        if real_values is not None:
+            to_concat.append(real_values)
+        concated = self.dropout(torch.cat(to_concat, dim=1))
+        hidden = self.hidden_layers(concated)
+        output = self.output(hidden)
+        return output
+
+
+class BSTSeqModel(nn.Module):
+    def __init__(self, vocab_size, emb_dims, num_doc_encoder_heads, attention_hidden_dim=100, 
+            num_transformer_heads=10, history_size=20, embedding_weights=None, discrete_vocab_sizes=None,
+            discrete_emb_dims=20, real_value_dims=0, dropout=0.2, device="cpu"):
+        super().__init__()
+        self.doc_encoder = DocEncoder(vocab_size, emb_dims, num_doc_encoder_heads, embedding_weights, attention_hidden_dim, dropout)
+        encoder_layer = nn.TransformerEncoderLayer(emb_dims, num_transformer_heads)
+        self.transformer = nn.TransformerEncoder(encoder_layer, 1)
+        self.real_value_dims = real_value_dims
+        hidden_size = (history_size+1) * emb_dims
+        if discrete_vocab_sizes:
+            self.discrete_embeddings = nn.ModuleList([nn.Embedding(size, discrete_emb_dims) for size in discrete_vocab_sizes])
+            hidden_size += len(discrete_vocab_sizes) * discrete_emb_dims
+        hidden_size += real_value_dims
+        self.hidden_layers = nn.Sequential(nn.Linear(hidden_size, 1024), nn.ReLU(),
+            nn.Linear(1024, 512), nn.ReLU(), nn.Linear(512, 256), nn.ReLU())
+        self.output = nn.Sequential(nn.Linear(256, 1), nn.Sigmoid())
+        self.dropout = nn.Dropout(dropout)
         self.device = device
-    
+
     def forward(self, click_history, history_seq_lens, candidates, candidate_seq_lens, discretes=None, real_values=None):
         batch_size, history_size, seq_len = click_history.shape
         reshaped_history = click_history.reshape(-1, seq_len)
@@ -47,7 +91,7 @@ class BSTModel(nn.Module):
         to_concat = [flattend] + discrete_embs
         if real_values is not None:
             to_concat.append(real_values)
-        concated = torch.cat(to_concat, dim=1)
+        concated = self.dropout(torch.cat(to_concat, dim=1))
         hidden = self.hidden_layers(concated)
         output = self.output(hidden)
         return output
@@ -61,7 +105,20 @@ class BSTModel(nn.Module):
 
 
 if __name__ == "__main__":
-    model = BSTModel(50, 50, 5, discrete_vocab_sizes=[5, 5], history_size=3)
+    # model = BSTModel(50, 50, discrete_vocab_sizes=[5, 5], history_size=3)
+
+    # x1 = np.array([[1, 2, 3], [2, 1, 3]])
+    # x2 = np.array([4, 4])
+
+    # x1 = torch.tensor(x1, dtype=torch.long)
+    # x2 = torch.tensor(x2, dtype=torch.long)
+
+    # discretes = [torch.tensor([2, 1], dtype=torch.long), torch.tensor([1, 3], dtype=torch.long)]
+
+    # sigmoids = model(x1, x2, discretes)
+    # print(sigmoids)
+
+    model = BSTSeqModel(50, 50, 5, discrete_vocab_sizes=[5, 5], history_size=3)
 
     x1 = np.array([[[1, 2, 3, 0], [1, 2, 4, 0], [0, 0, 0, 0]]])
     seq_lens1 = np.array([[3, 2, 1]])

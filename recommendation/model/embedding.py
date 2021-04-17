@@ -2,22 +2,6 @@ import torch
 import torch.nn as nn
 
 
-class SkipGram(nn.Module):
-    def __init__(self, vocab_size, emb_dims):
-        super().__init__()
-        self.embedding_in = nn.Embedding(vocab_size, emb_dims)
-        self.embedding_out = nn.Embedding(vocab_size, emb_dims)
-        init_range = 0.5 / emb_dims
-        self.embedding_in.weight.data.uniform_(-init_range, init_range)
-        self.embedding_out.weight.data.uniform_(-init_range, init_range)
-
-    def forward(self, central_items, context_items):
-        hidden = self.embedding_in(central_items)
-        context = self.embedding_out(context_items)
-        logits = torch.bmm(hidden.unsqueeze(1), context.permute(0, 2, 1))
-        return torch.sigmoid(logits.squeeze(1))
-
-
 class GESModel(nn.Module):
     def __init__(self, num_items, side_info_vocab_sizes, emb_dims=100):
         super().__init__()

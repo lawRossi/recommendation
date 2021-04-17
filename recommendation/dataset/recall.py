@@ -8,6 +8,7 @@ import os
 import numpy as np
 from tqdm import tqdm
 import random
+import torch
 
 
 class RecallDataset(data.Dataset):
@@ -143,7 +144,7 @@ class GESDataset(RecallDataset):
             self.vocab = vocab
             self.attr_vocabs = attr_vocabs
             self.items = np.arange(0, len(self.vocab)+1)
-            self.weights = weights
+            self.weights = torch.tensor(weights)
         if self.attr_vocabs:
             self._load_attributes()
 
@@ -162,7 +163,9 @@ class GESDataset(RecallDataset):
     def __getitem__(self, index):
         with self.env.begin(write=False) as txn:
             central_id, context = pickle.loads(txn.get(struct.pack(">I", index)))
-            negatives = np.random.choice(self.items, size=len(context)*self.num_negative, p=self.weights)
+            # negatives = np.random.choice(self.items, size=len(context)*self.num_negative, p=self.weights)
+            negatives = torch.multinomial(self.weights, len(context)*self.num_negative, replacement=True)
+            negatives = [self.items[idx] for idx in negatives]
             labels = [1] * len(context) + [0] * len(negatives)
             context = [self.vocab.get(item_id, len(self.vocab)+1) for item_id in context]
             context.extend(negatives)

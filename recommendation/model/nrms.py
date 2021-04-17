@@ -20,20 +20,19 @@ class AdditiveAttention(nn.Module):
 
 
 class DocEncoder(nn.Module):
-    def __init__(self, vocab_size, emb_dim, num_heads, embedding_weights=None, attention_hidden_dim=100, dropout=0.2):
+    def __init__(self, vocab_size, emb_dims, num_heads, embedding_weights=None, attention_hidden_dim=100, dropout=0.2):
         super().__init__()
         if embedding_weights is None:
-            self.embbedding = nn.Embedding(vocab_size, emb_dim, padding_idx=0)
+            self.embbedding = nn.Embedding(vocab_size, emb_dims, padding_idx=0)
         else:
             weights = torch.tensor(embedding_weights, dtype=torch.float)
             self.embbedding = nn.Embedding.from_pretrained(weights, freeze=False, padding_idx=0)
-        self.mha = nn.MultiheadAttention(emb_dim, num_heads, dropout=dropout)
+        self.mha = nn.MultiheadAttention(emb_dims, num_heads, dropout=dropout)
         self.dropout = nn.Dropout(dropout)
-        self.attention = AdditiveAttention(emb_dim, attention_hidden_dim)
+        self.attention = AdditiveAttention(emb_dims, attention_hidden_dim)
 
     def forward(self, x, masks=None):
         """
-
         Args:
             x : tensor with shape (batch_size, seq_len)
         """
@@ -58,20 +57,23 @@ class UserEncoder(nn.Module):
         output = self.attention(attended_docs, masks)
         return output
 
+
 class NRMS(nn.Module):
-    def __init__(self, vocab_size, emb_dim, num_heads, attention_hidden_dim=100, embedding_weights=None, dropout=0.2, device="cpu"):
+    def __init__(self, vocab_size, emb_dims, num_heads, attention_hidden_dim=100, embedding_weights=None, dropout=0.2, device="cpu"):
         super().__init__()
-        self.doc_encoder = DocEncoder(vocab_size, emb_dim, num_heads, embedding_weights, attention_hidden_dim, dropout)
-        self.user_encoder = UserEncoder(emb_dim, num_heads, attention_hidden_dim, dropout)
-        self.emb_dim = emb_dim
+        self.doc_encoder = DocEncoder(vocab_size, emb_dims, num_heads, embedding_weights, attention_hidden_dim, dropout)
+        self.user_encoder = UserEncoder(emb_dims, num_heads, attention_hidden_dim, dropout)
+        self.emb_dims = emb_dims
         self.device = device
 
-    def forward(self, click_history, history_lens, history_seq_lens, candidates, candidate_seq_lens):
+    def forward(self, click_history, history_lens, candidates, history_seq_lens=None, candidate_seq_lens=None):
         """
-
         Args:
-            click_history : tensor with shape (batch_size, history_size, seq_len)
-            candidates : tensor with shape (batch_size, num_candidates, seq_len)
+            click_history (tensor) : tensor with shape (batch_size, history_size, seq_len)
+            history_lens (tensor): tensor with shape (batch_size, )
+            candidates (tensor) : tensor with shape (batch_size, num_candidates, seq_len)
+            history_seq_lens (tensor, optional): tensor with shape (batch_size, history_size)
+            candidate_seq_lens (tensor, optional): (batch_size, num_candidates)
         """
         batch_size, history_size, seq_len = click_history.shape
         num_candidates = candidates.shape[1]
