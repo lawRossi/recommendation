@@ -122,8 +122,8 @@ class YoutubeNetModel:
             self.attr_vocabs = None
         self.max_history = max_history
         self.device = device
-    
-    def encode_user(self, click_history, discrete_attrs):
+        
+    def encode_user(self, click_history, discrete_attrs=None):
         click_history = [self.vocab[item_id] for item_id in click_history if item_id in self.vocab]
         click_history = click_history[-self.max_history:]
         history_tensor = torch.tensor([click_history], dtype=torch.long, device=self.device)
