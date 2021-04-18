@@ -1,6 +1,6 @@
 from collections import defaultdict
 import faiss
-from .model_wraper import NRMSModel, YoutubeNetModel
+from .model_wraper import NRMSModel, YoutubeNetModel, GESModel
 import json
 import os
 import numpy as np
@@ -129,9 +129,9 @@ class Item2vectorRecaller(Recaller):
         items = [item for item in items if item["id"] in self.model.vocab]
         vecs = [self.model[item["id"]] for item in items]
         return np.array(vecs, dtype="float32")
-    
+
     def build_index(self, items):
-        items = [{"id": key} for key in self.model.vocab.keys()]
+        items = [item for item in items if item["id"] in self.model.vocab]
         self.index.build_index(items, self.model_dir)
 
     def load_index(self):
@@ -148,6 +148,30 @@ class YoutubeNetRecaller(Item2vectorRecaller):
         query_vec = self.encoder_model.encode_user(clicked_items)
         recalled_ids = self.index.retrieve(query_vec, topk)
         return recalled_ids[0]
+
+
+class GesRecaller(Recaller):
+    def __init__(self, model_dir, device="cpu"):
+        self.model = GESModel(model_dir, device)
+        self.index = ItemIndex(self.model.emb_dims, self.encode_items, "cosine")
+        self.model_dir = model_dir
+    
+    def recall(self, clicked_items, user, topk):
+        query_vecs = self.encode_items(clicked_items[-5:])
+        n = topk // 5
+        item_ids = self.index.retrieve(query_vecs, n)
+        clicked_ids = [item["id"] for item in clicked_items]
+        recalled_ids = [item_id for item_id in chain.from_iterable(item_ids) if item_id not in clicked_ids]
+        return recalled_ids
+
+    def build_index(self, items):
+        self.index.build_index(items, self.model_dir)
+    
+    def load_index(self):
+        return self.index.load_index(self.model_dir)
+    
+    def encode_items(self, items):
+        return self.model.encode_items(items)
 
 
 class CompoundRecaller(Recaller):

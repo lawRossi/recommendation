@@ -138,3 +138,35 @@ class YoutubeNetModel:
             discrete_tensors = None
         encodings = self.model(history_tensor, discrete_features=discrete_tensors)
         return encodings.cpu().detach().numpy()
+
+
+class GESModel:
+    def __init__(self, model_dir, device="cpu"):
+        model_path = os.path.join(model_dir, "ges.pt")
+        self.model = torch.load(model_path, map_location=device)
+        self.model.eval()
+        self.emb_dims = self.model.emb_dims
+        vocab_file = os.path.join(model_dir, "vocab.json")
+        with open(vocab_file, encoding="utf-8") as fi:
+            self.vocab = json.load(fi)
+        attr_vocab_file = os.path.join(model_dir, "attr_vocabs.json")
+        with open(attr_vocab_file, encoding="utf-8") as fi:
+            self.attr_vocabs = json.load(fi)
+        with open(os.path.join(model_dir, "attr_names.txt")) as fi:
+            self.atrribute_names = fi.readline().strip().split(" ")
+        self.device = device
+    
+    def encode_items(self, items):
+        item_idxes = []
+        attr_idxes = [[] for _ in range(len(self.atrribute_names))]
+        for item in items:
+            item_idx = self.vocab.get(item["id"], len(self.vocab)+1)
+            item_idxes.append(item_idx)
+            for i, attr_name in enumerate(self.atrribute_names):
+                attr_value = item.get(attr_name, "unk")
+                vocab = self.attr_vocabs[attr_name]
+                attr_idx = vocab.get(attr_value, len(vocab))
+                attr_idxes[i].append(attr_idx)
+        item_idxes = torch.tensor(item_idxes, dtype=torch.long, device=self.device)
+        attr_idxes = [torch.tensor(item, dtype=torch.long, device=self.device) for item in attr_idxes]
+        return self.model._emb_items(item_idxes, attr_idxes).cpu().detach().numpy()

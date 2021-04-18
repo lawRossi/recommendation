@@ -36,6 +36,7 @@ class RecallDataset(data.Dataset):
         if self.attr_file:
             attr_counts = defaultdict(lambda : defaultdict(int))
             for attrs in self.attributes.values():
+                print(attrs)
                 for attr_name in self.attribute_names:
                     attr_counts[attr_name][attrs[attr_name]] += 1
             self.attr_vocabs = {}
