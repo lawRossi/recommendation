@@ -50,12 +50,23 @@ class YoutubeNetModel(nn.Module):
         if discrete_vocab_sizes:
             self.discrete_embeddings = nn.ModuleList([nn.Embedding(vocab_size, discrete_emb_dims) for vocab_size in discrete_vocab_sizes])
             feature_emb_dims += len(discrete_vocab_sizes) * discrete_emb_dims
+        else:
+            self.discrete_embeddings = None
         feature_emb_dims += num_real_values
         hidden_dims = [item_emb_dims * 4, item_emb_dims*2, item_emb_dims]
         self.hidden_layers = nn.Sequential(nn.Linear(feature_emb_dims, hidden_dims[0]), nn.ReLU(), nn.Linear(hidden_dims[0], hidden_dims[1]), 
             nn.ReLU(), nn.Linear(hidden_dims[1], hidden_dims[2]), nn.ReLU())
         self.dropout = nn.Dropout(droput)
         self.loss = SampledSoftmaxLoss(num_items, item_emb_dims, num_negatives=num_negatives, weights=weights)
+        self._init_embedding_weights()
+
+    def _init_embedding_weights(self):
+        init_range = 0.5 / self.item_emb_dims
+        self.item_embedding.weight.data.uniform_(-init_range, init_range)
+        if self.discrete_embeddings:
+            init_range = 0.5 / self.discrete_emb_dims
+            for embedding in self.discrete_embeddings:
+                embedding.weight.data.uniform_(-init_range, init_range)
 
     def forward(self, click_history, positives=None, discrete_features=None, real_value_features=None):
         """[summary]
