@@ -151,15 +151,6 @@ class GESDataset(RecallDataset):
     def __len__(self) -> int:
         return self.length
 
-    def _load_attributes(self):
-        with open(self.attr_file, encoding="utf-8") as fi:
-            headers = fi.readline().split("\t")[1:]  # skip id
-            self.attribute_names = headers
-            self.attributes = {}
-            for line in fi:
-                splits = line.strip().split("\t")
-                self.attributes[splits[0]] = (dict(zip(headers, splits[1:])))
-
     def __getitem__(self, index):
         with self.env.begin(write=False) as txn:
             central_id, context = pickle.loads(txn.get(struct.pack(">I", index)))
