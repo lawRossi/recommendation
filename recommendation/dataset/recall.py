@@ -47,7 +47,7 @@ class RecallDataset(data.Dataset):
 
     def _load_attributes(self):
         with open(self.attr_file, encoding="utf-8") as fi:
-            headers = fi.readline().split("\t")[1:]  # skip id
+            headers = fi.readline().strip().split("\t")[1:]  # skip id
             self.attribute_names = headers
             self.attributes = {}
             for line in fi:
@@ -127,9 +127,9 @@ class YoutubeNetDataset(RecallDataset):
 class GESDataset(RecallDataset):
     """[summary]
     """
-    def __init__(self, click_list_file, attr_file, window_size=5, cache_path=".ges", rebuild_cache=False,
+    def __init__(self, click_history_file, attr_file, window_size=5, cache_path=".ges", rebuild_cache=False,
             min_count=3,  num_negative=5):
-        super().__init__(click_list_file, attr_file, min_count)
+        super().__init__(click_history_file, attr_file, min_count)
         self.window_size = window_size
         self.num_negative = num_negative
 
@@ -163,7 +163,6 @@ class GESDataset(RecallDataset):
     def __getitem__(self, index):
         with self.env.begin(write=False) as txn:
             central_id, context = pickle.loads(txn.get(struct.pack(">I", index)))
-            # negatives = np.random.choice(self.items, size=len(context)*self.num_negative, p=self.weights)
             negatives = torch.multinomial(self.weights, len(context)*self.num_negative, replacement=True)
             negatives = [self.items[idx] for idx in negatives]
             labels = [1] * len(context) + [0] * len(negatives)
