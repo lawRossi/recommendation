@@ -111,6 +111,7 @@ class YoutubeNetModel:
     def __init__(self, model_dir, max_history=30, device="cpu"):
         model_path = os.path.join(model_dir, "youtube_net.pt")
         self.model = torch.load(model_path, map_location=device)
+        self.model.eval()
         vocab_file = os.path.join(model_dir, "vocab.json")
         with open(vocab_file, encoding="utf-8") as fi:
             self.vocab = json.load(fi)
@@ -122,7 +123,7 @@ class YoutubeNetModel:
             self.attr_vocabs = None
         self.max_history = max_history
         self.device = device
-        
+
     def encode_user(self, click_history, discrete_attrs=None):
         click_history = [self.vocab[item_id] for item_id in click_history if item_id in self.vocab]
         click_history = click_history[-self.max_history:]
