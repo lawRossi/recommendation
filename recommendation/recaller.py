@@ -156,7 +156,7 @@ class GesRecaller(Recaller):
         self.index = ItemIndex(self.model.emb_dims, self.encode_items, "cosine")
         self.model_dir = model_dir
     
-    def recall(self, clicked_items, user=None, topk):
+    def recall(self, clicked_items, user=None, topk=20):
         query_vecs = self.encode_items(clicked_items[-5:])
         n = topk // 5
         item_ids = self.index.retrieve(query_vecs, n)
@@ -165,9 +165,6 @@ class GesRecaller(Recaller):
         return recalled_ids
 
     def build_index(self, items):
-        batch_size = 126
-        for i in range(0, len(items), batch_size):
-            batch_items = items[i:i+batch_size]
         self.index.build_index(items, self.model_dir)
     
     def load_index(self):
