@@ -165,13 +165,22 @@ class GesRecaller(Recaller):
         return recalled_ids
 
     def build_index(self, items):
+        batch_size = 126
+        for i in range(0, len(items), batch_size):
+            batch_items = items[i:i+batch_size]
         self.index.build_index(items, self.model_dir)
     
     def load_index(self):
         return self.index.load_index(self.model_dir)
     
     def encode_items(self, items):
-        return self.model.encode_items(items)
+        batch_size = 128
+        vecs = []
+        for i in range(0, len(items), batch_size):
+            batch_items = items[i:i+batch_size]
+            batch_vecs = self.model.encode_items(batch_items)
+            vecs.append(batch_vecs)
+        return np.concatenate(vecs)
 
 
 class CompoundRecaller(Recaller):
