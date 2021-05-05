@@ -41,7 +41,9 @@ class ItemIndex:
     def add_items(self, items):
         vecs = self.encode_func(items)
         self.index.add(vecs)
-    
+        for item in items:
+            self.item_ids.append(item["id"])
+
     def retrieve(self, query_vecs, topk=10):
         if self.metric == "cosine":
             faiss.normalize_L2(query_vecs)

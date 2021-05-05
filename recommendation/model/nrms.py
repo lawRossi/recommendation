@@ -23,10 +23,10 @@ class DocEncoder(nn.Module):
     def __init__(self, vocab_size, emb_dims, num_heads, embedding_weights=None, attention_hidden_dim=100, dropout=0.2):
         super().__init__()
         if embedding_weights is None:
-            self.embbedding = nn.Embedding(vocab_size, emb_dims, padding_idx=0)
+            self.embedding = nn.Embedding(vocab_size, emb_dims, padding_idx=0)
         else:
             weights = torch.tensor(embedding_weights, dtype=torch.float)
-            self.embbedding = nn.Embedding.from_pretrained(weights, freeze=False, padding_idx=0)
+            self.embedding = nn.Embedding.from_pretrained(weights, freeze=False, padding_idx=0)
         self.mha = nn.MultiheadAttention(emb_dims, num_heads, dropout=dropout)
         self.dropout = nn.Dropout(dropout)
         self.attention = AdditiveAttention(emb_dims, attention_hidden_dim)
@@ -36,7 +36,7 @@ class DocEncoder(nn.Module):
         Args:
             x : tensor with shape (batch_size, seq_len)
         """
-        embedded = self.dropout(self.embbedding(x))
+        embedded = self.dropout(self.embedding(x))
         permuted = embedded.permute(1, 0, 2)
         attended, _ = self.mha(permuted, permuted, permuted)
         attended = attended.permute(1, 0, 2)
