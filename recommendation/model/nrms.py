@@ -1,5 +1,6 @@
 import torch 
 import torch.nn as nn
+from torch.nn.functional import normalize
 
 
 class AdditiveAttention(nn.Module):
@@ -59,12 +60,13 @@ class UserEncoder(nn.Module):
 
 
 class NRMS(nn.Module):
-    def __init__(self, vocab_size, emb_dims, num_heads, attention_hidden_dim=100, embedding_weights=None, dropout=0.2, device="cpu"):
+    def __init__(self, vocab_size, emb_dims, num_heads, attention_hidden_dim=100, embedding_weights=None, dropout=0.2, device="cpu", temperature=0.05):
         super().__init__()
         self.doc_encoder = DocEncoder(vocab_size, emb_dims, num_heads, embedding_weights, attention_hidden_dim, dropout)
         self.user_encoder = UserEncoder(emb_dims, num_heads, attention_hidden_dim, dropout)
         self.emb_dims = emb_dims
         self.device = device
+        self.temperature = temperature
 
     def forward(self, click_history, history_lens, candidates, history_seq_lens=None, candidate_seq_lens=None):
         """
@@ -73,7 +75,7 @@ class NRMS(nn.Module):
             history_lens (tensor): tensor with shape (batch_size, )
             candidates (tensor) : tensor with shape (batch_size, num_candidates, seq_len)
             history_seq_lens (tensor, optional): tensor with shape (batch_size, history_size)
-            candidate_seq_lens (tensor, optional): (batch_size, num_candidates)
+            candidate_seq_lens (tensor, optional): tensor with shape (batch_size, num_candidates)
         """
         batch_size, history_size, seq_len = click_history.shape
         num_candidates = candidates.shape[1]
@@ -84,13 +86,16 @@ class NRMS(nn.Module):
         encoded_history = encoded_history.reshape(batch_size, history_size, -1)
         masks = self._compute_mask(history_size, history_lens)
         encoded_users = self.user_encoder(encoded_history, masks)
+        encoded_users = normalize(encoded_users, p=2, dim=1)
 
         reshaped_candidates = candidates.reshape(-1, seq_len)
         candidate_seq_lens = candidate_seq_lens.reshape(-1, 1)
         masks = self._compute_mask(seq_len, candidate_seq_lens)
         encoded_candidates = self.doc_encoder(reshaped_candidates, masks)
+        encoded_candidates = normalize(encoded_candidates, p=2, dim=1)
         encoded_candidates = encoded_candidates.reshape(batch_size, num_candidates, -1)
         logits = torch.bmm(encoded_users.unsqueeze(1), encoded_candidates.permute(0, 2, 1)).squeeze(1)
+        logits /= self.temperature
         return torch.sigmoid(logits)
 
     def _compute_mask(self, max_seq_len, seq_lens):
