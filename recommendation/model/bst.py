@@ -29,9 +29,9 @@ class BSTModel(nn.Module):
         encoded_history = self.item_embedding(click_history)
         encoded_candidates = self.item_embedding(candidates).unsqueeze(1)
         concated = torch.cat((encoded_history, encoded_candidates), dim=1)
-        transformed = self.transformer(concated)
+        transformed = self.transformer(concated.permute(1, 0, 2))
         batch_size, _ = click_history.shape
-        flattend = transformed.reshape(batch_size, -1)
+        flattend = transformed.permute(1, 0, 2).reshape(batch_size, -1)
 
         discrete_embs = []
         if discretes is not None:
@@ -80,8 +80,8 @@ class BSTSeqModel(nn.Module):
         encoded_candidates = encoded_candidates.unsqueeze(1)
 
         concated = torch.cat((encoded_history, encoded_candidates), dim=1)
-        transformed = self.transformer(concated)
-        flattend = transformed.reshape(batch_size, -1)
+        transformed = self.transformer(concated.permute(1, 0, 2))
+        flattend = transformed.permute(1, 0, 2).reshape(batch_size, -1) 
 
         discrete_embs = []
         if discretes is not None:
