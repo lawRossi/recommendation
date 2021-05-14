@@ -23,6 +23,30 @@ EGES | 阿里提出的Enhanced Graph Embedding with Side-information模型 |Wang
 NRMS | 微软研究研究提出的新闻推荐模型 | Wu, Chuhan, et al. "Neural news recommendation with multi-head self-attention." Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP). 2019.
 BST | 阿里提出的Behavior Sequence Transformer模型|Chen, Qiwei, et al. "Behavior sequence transformer for e-commerce recommendation in alibaba." Proceedings of the 1st International Workshop on Deep Learning Practice for High-Dimensional Sparse Data. 2019.
 
-### TODO
+## TODO
 1. 实现DIN模型
 2. 拿实验数据对比各个模型效果
+
+## 模型效果
+
+1. 新闻推荐
+
+### 实验设置
+1. 数据集
+使用微软发布的新闻推荐数据集
+
+
+2. 模型参数
+
+最大历史点击数：30  
+标题最大长度（词数): 25  
+dropout: 0.2  
+embedding 维度300  
+注意力头：20  
+addative attention隐含层维度：200  
+
+
+模型名称|dev-set auc|备注
+--| -- | --
+NRMS| 0.671 |论文提出的原始模型
+NRMS-cosine| 0.684 | 基于原始模型修改了相似度计算和loss计算
